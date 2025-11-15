@@ -53,6 +53,7 @@ class TestamonialController extends AbstractController
 
             return new JsonResponse($dataTestimonials);
         } catch(\Throwable $e) {
+            die($e->getMessage());
             $this->logger->error('Erreur de la récupération des avis utilisateurs', ['error' => $e->getMessage()]);
             return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
