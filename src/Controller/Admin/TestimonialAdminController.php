@@ -4,6 +4,7 @@ namespace App\Controller\Admin;
 
 use App\Entity\Testamonial;
 use Doctrine\ORM\EntityManagerInterface;
+use App\Services\UploadFile;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -13,16 +14,19 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Component\Serializer\SerializerInterface;
 
-#[Route('/api/testimonial')]
+#[Route('/api/admin/testimonial')]
 #[IsGranted('ROLE_ADMIN')]
 class TestimonialAdminController extends AbstractController
 {
     private EntityManagerInterface $entityManager;
+    private UploadFile $uploadFile;
     private LoggerInterface $logger;
 
-    public function __construct(EntityManagerInterface $entityManager, LoggerInterface $logger)
+    public function __construct(
+        EntityManagerInterface $entityManager, UploadFile $uploadFile, LoggerInterface $logger)
     {
         $this->entityManager = $entityManager;
+        $this->uploadFile = $uploadFile;
         $this->logger = $logger;
     }
 
@@ -34,7 +38,19 @@ class TestimonialAdminController extends AbstractController
             $limit = $request->query->get('limit');
 
             $testimonial = $this->entityManager->getRepository(Testamonial::class)->findAllOrdered($limit, $offset);
-            $dataTestimonial = $serializer->normalize($testimonial, 'json', ['groups' => ['testimonial']]);
+
+            $dataTestimonial = $serializer->normalize($testimonial, 'json', ['groups' => ['testimonial', 'picture'],
+                'circular_reference_handler' => function ($object) {
+                    return $object->getId();
+                }
+            ]);
+
+//            dd($dataTestimonial);
+
+//            foreach ($testimonial as &$elem) {
+//                dd($elem);
+//            }
+
             return new JsonResponse($dataTestimonial, Response::HTTP_OK);
         } catch(\Throwable $e) {
             $this->logger->error('Erreur de la récupération des avis utilisateurs', ['error' => $e->getMessage()]);
@@ -63,8 +79,12 @@ class TestimonialAdminController extends AbstractController
     {
         try {
             $testimonial = $this->entityManager->getRepository(Testamonial::class)->find($id);
+            if (!$testimonial) {
+                return new JsonResponse(['message' => 'Témoignage introuvable'], Response::HTTP_NOT_FOUND);
+            }
 
             $testimonial->setIsRead(true);
+
             $this->entityManager->persist($testimonial);
             $this->entityManager->flush();
 
@@ -72,6 +92,32 @@ class TestimonialAdminController extends AbstractController
             return new JsonResponse($dataTestimonial, Response::HTTP_OK);
         } catch(\Throwable $e) {
             $this->logger->error('Erreur de la récupération des avis utilisateurs', ['error' => $e->getMessage()]);
+            return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    #[Route('/delete/{id}', methods: ['DELETE'])]
+    public function delete(int $id): JsonResponse
+    {
+        try {
+            $testimonial = $this->entityManager->getRepository(Testamonial::class)->find($id);
+            if (!$testimonial) {
+                return new JsonResponse(['message' => 'Témoignage introuvable'], Response::HTTP_NOT_FOUND);
+            }
+
+            $image = $testimonial->getPicture();
+
+            if ($image && !is_iterable($image)) {
+                $this->uploadFile->deleteImageFile($image);
+                $this->entityManager->remove($image);
+            }
+
+            $this->entityManager->remove($testimonial);
+            $this->entityManager->flush();
+
+            return new JsonResponse(['message' => 'Le témoignage a bien été supprimé'], Response::HTTP_OK);
+        } catch(\Throwable $e) {
+            $this->logger->error('Erreur de la suppression d\'un avis utilisateur', ['error' => $e->getMessage()]);
             return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
@@ -87,7 +133,7 @@ class TestimonialAdminController extends AbstractController
 
             return new JsonResponse([
                 'success' => true,
-                'isPublished' => $testimonial->isPublished(),
+                'isPublished' => $testimonial->isPublished()
             ]);
         } catch(\Throwable $e) {
             return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);

@@ -26,6 +26,7 @@ class ContactAdminController extends AbstractController
         $this->entityManager = $entityManager;
         $this->logger = $logger;
     }
+
     #[Route('/contacts', methods: ['GET'])]
     public function list(Request $request, SerializerInterface $serializer): JsonResponse
     {
@@ -48,6 +49,9 @@ class ContactAdminController extends AbstractController
     {
         try {
             $contact = $this->entityManager->getRepository(Contact::class)->find($id);
+            if (!$contact) {
+                return new JsonResponse(['message' => 'Contact not found'], Response::HTTP_NOT_FOUND);
+            }
 
             $contact->setIsRead(true);
             $this->entityManager->persist($contact);
@@ -69,8 +73,10 @@ class ContactAdminController extends AbstractController
             if (!$contact) {
                 return new JsonResponse(['error' => 'Contact not found'], Response::HTTP_NOT_FOUND);
             }
+
             $this->entityManager->remove($contact);
             $this->entityManager->flush();
+
             return new JsonResponse(['success' => true], Response::HTTP_OK);
         } catch (\Throwable $e) {
             $this->logger->error('Erreur de la suppression d\'un message : ', ['error' => $e->getMessage()]);
@@ -83,8 +89,8 @@ class ContactAdminController extends AbstractController
     {
         try {
             $search = $request->query->get('search');
-
             $contacts = $this->entityManager->getRepository(Contact::class)->findAllContactSearch($search);
+
             $dataContacts = $serializer->normalize($contacts, 'json', ['groups' => ['contacts']]);
             return new JsonResponse($dataContacts, Response::HTTP_OK);
         } catch (\Throwable $e) {

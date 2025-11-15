@@ -19,4 +19,12 @@ class UploadFile
         $file->move($this->image_directory, $newFileName);
         return $newFileName;
     }
+
+    public function deleteImageFile($image): void
+    {
+        $filePath = $this->getParameter('image_directory') . '/' . $image->getFilename();
+        if ($image->getFilename() && file_exists($filePath)) {
+            unlink($filePath);
+        }
+    }
 }

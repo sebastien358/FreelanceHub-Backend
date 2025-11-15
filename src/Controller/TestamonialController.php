@@ -14,9 +14,10 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Serializer\SerializerInterface;
 
 
-#[Route('/api/testamonial')]
+#[Route('/api/testimonial')]
 class TestamonialController extends AbstractController
 {
     private EntityManagerInterface $entityManager;
@@ -30,6 +31,31 @@ class TestamonialController extends AbstractController
         $this->entityManager = $entityManager;
         $this->uploadFile = $uploadFile;
         $this->logger = $logger;
+    }
+
+    #[Route('/list', methods: ['GET'])]
+    public function list(Request $request, SerializerInterface $serializer): JsonResponse
+    {
+        try {
+            $testimonials = $this->entityManager->getRepository(Testamonial::class)->findAll();
+
+            $dataTestimonials = $serializer->normalize($testimonials, 'json', [
+                'groups' => ['testimonial', 'picture'],
+                'circular_reference_handler' => fn($object) => $object->getId(),
+            ]);
+
+            $urlFilename = $request->getSchemeAndHttpHost() . '/images/';
+            foreach ($dataTestimonials as &$data) {
+                if (!empty($data['picture'])) {
+                    $data['picture']['filename'] = $urlFilename . $data['picture']['filename'];
+                }
+            }
+
+            return new JsonResponse($dataTestimonials);
+        } catch(\Throwable $e) {
+            $this->logger->error('Erreur de la récupération des avis utilisateurs', ['error' => $e->getMessage()]);
+            return new JsonResponse(['error' => $e->getMessage()], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
     }
 
     #[Route('/add', methods: ['POST'])]

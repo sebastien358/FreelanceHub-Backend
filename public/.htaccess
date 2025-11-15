@@ -1,0 +1,17 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Redirige toutes les requêtes vers index.php
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^(.*)$ index.php [QSA,L]
+</IfModule>
+
+# Protège certains fichiers sensibles
+<FilesMatch "^(\.env|composer\.json|composer\.lock|phpunit\.xml|symfony\.lock)$">
+    Require all denied
+</FilesMatch>
+
+# Protège le dossier /config et /vendor
+<DirectoryMatch "(config|vendor)">
+    Require all denied
+</DirectoryMatch>
